@@ -99,9 +99,7 @@ class ForexPredictor:
         # Load historical data from the history file
         with open(self.history_file, 'r') as file:
             history_data = json.load(file)
-            
 
-        # Extract features (X) and targets (y) from historical data
         # Extract features (X) and targets (y) from historical data
         X = []
         y_open = []
@@ -109,21 +107,20 @@ class ForexPredictor:
         y_low = []
         y_close = []
 
-        time_series = history_data["Time Series FX (Daily)"]
+        for data_point in history_data:
+            time_series = data_point["Time Series FX (Daily)"]
+            for date, data in time_series.items():
+                # Extract features and targets from each data point
+                open_price = float(data["1. open"])
+                high_price = float(data["2. high"])
+                low_price = float(data["3. low"])
+                close_price = float(data["4. close"])
 
-        for date, data in time_series.items():
-            # Extract features and targets from each data point
-            open_price = float(data["1. open"])
-            high_price = float(data["2. high"])
-            low_price = float(data["3. low"])
-            close_price = float(data["4. close"])
-            
-            X.append([open_price, high_price, low_price, close_price])
-            y_open.append(open_price)
-            y_high.append(high_price)
-            y_low.append(low_price)
-            y_close.append(close_price)
-
+                X.append([open_price, high_price, low_price, close_price])
+                y_open.append(open_price)
+                y_high.append(high_price)
+                y_low.append(low_price)
+                y_close.append(close_price)
 
         # Convert lists to numpy arrays
         X = np.array(X)
@@ -139,8 +136,11 @@ class ForexPredictor:
         close_model = LinearRegression().fit(X, y_close)
 
         # Predict the next prices based on the last historical data point
-        last_data_point = history_data[-1]
-        last_features = np.array([[float(last_data_point['open']), float(last_data_point['high']), float(last_data_point['low']), float(last_data_point['close'])]])
+        last_data_point = history_data[-1]["Time Series FX (Daily)"]
+        last_features = np.array([[float(last_data_point[date]["1. open"]),
+                                    float(last_data_point[date]["2. high"]),
+                                    float(last_data_point[date]["3. low"]),
+                                    float(last_data_point[date]["4. close"])] for date in last_data_point])
 
         next_open = open_model.predict(last_features)[0]
         next_high = high_model.predict(last_features)[0]
@@ -161,10 +161,3 @@ class ForexPredictor:
         logger.warning("predictions made successfully")
 
         return "predictions made successfully"
-
-        
-
-    
-
-        
-    
