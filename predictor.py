@@ -43,83 +43,112 @@ class ForexPredictor:
 
         if response.status_code == 200:
             data = response.json()
-            self.save_to_history(data, type="comp")
+            self.save_comp_history(data)
             logger.warning(f"Predicted OHLCV data saved to {self.comp_file}")
         else:
             logger.warning("No data found.")
 
-    def predict_comp(self):
-        logger.warning("prediction start")
-        with open(self.comp_file, "r") as file:
-            history_data = json.load(file)["OHLCV Data"]
 
-        # Extract features (X) and targets (y) from historical data
-        X = []
-        y_open = []
-        y_high = []
-        y_low = []
-        y_close = []
 
-        for data_point in history_data:
-            # Extract features and targets from each data point
-            features = [
-                float(data_point["open"]),
-                float(data_point["high"]),
-                float(data_point["low"]),
-                float(data_point["close"]),
-            ]
-            target_open = float(data_point["open"])
-            target_high = float(data_point["high"])
-            target_low = float(data_point["low"])
-            target_close = float(data_point["close"])
+    def predict_comp(self, symbol):
+        logger.warning("Prediction start")
 
-            X.append(features)
-            y_open.append(target_open)
-            y_high.append(target_high)
-            y_low.append(target_low)
-            y_close.append(target_close)
+        try:
+            with open(self.comp_file, "r") as file:
+                data = json.load(file)
 
-        # Convert lists to numpy arrays
-        X = np.array(X)
-        y_open = np.array(y_open)
-        y_high = np.array(y_high)
-        y_low = np.array(y_low)
-        y_close = np.array(y_close)
+            for entry in data:
+                meta_data = entry.get("Meta Data", {})
+                entry_symbol = meta_data.get("2. Symbol")
+                logger.warning(f"{entry_symbol}")
 
-        # Fit linear regression models
-        open_model = LinearRegression().fit(X, y_open)
-        high_model = LinearRegression().fit(X, y_high)
-        low_model = LinearRegression().fit(X, y_low)
-        close_model = LinearRegression().fit(X, y_close)
+                if entry_symbol == symbol:
+                    time_series = entry.get("Time Series (5min)")
+                    if not time_series:
+                        logger.error(f"No time series data found for symbol {symbol}.")
+                        return
 
-        # Predict the next OHLCV values using the trained models
-        last_data_point = list(history_data)[0]
-        last_features = np.array(
-            [
-                float(last_data_point["open"]),
-                float(last_data_point["high"]),
-                float(last_data_point["low"]),
-                float(last_data_point["close"]),
-            ]
-        ).reshape(1, -1)
+                    X = []
+                    y_open = []
+                    y_high = []
+                    y_low = []
+                    y_close = []
 
-        next_open = open_model.predict(last_features)[0]
-        next_high = high_model.predict(last_features)[0]
-        next_low = low_model.predict(last_features)[0]
-        next_close = close_model.predict(last_features)[0]
+                    for timestamp, data_point in time_series.items():
+                        features = [
+                            float(data_point["1. open"]),
+                            float(data_point["2. high"]),
+                            float(data_point["3. low"]),
+                            float(data_point["4. close"])
+                        ]
+                        target_open = float(data_point["1. open"])
+                        target_high = float(data_point["2. high"])
+                        target_low = float(data_point["3. low"])
+                        target_close = float(data_point["4. close"])
+                        X.append(features)
+                        y_open.append(target_open)
+                        y_high.append(target_high)
+                        y_low.append(target_low)
+                        y_close.append(target_close)
 
-        # Construct the predicted OHLCV data
-        predicted_data = {
-            "1. open": str(next_open),
-            "2. high": str(next_high),
-            "3. low": str(next_low),
-            "4. close": str(next_close),
-            "5. volume": "0",  # Volume is not predicted, so setting it to 0
-        }
+                    X = np.array(X)
+                    y_open = np.array(y_open)
+                    y_high = np.array(y_high)
+                    y_low = np.array(y_low)
+                    y_close = np.array(y_close)
 
-        with open("comp_predictions.json", "w") as file:
-            json.dump(predicted_data, file)
-            logger.warning("predictions made successfully")
+                    open_model = LinearRegression().fit(X, y_open)
+                    high_model = LinearRegression().fit(X, y_high)
+                    low_model = LinearRegression().fit(X, y_low)
+                    close_model = LinearRegression().fit(X, y_close)
+
+                    last_timestamp, last_data_point = list(time_series.items())[0]
+                    last_features = np.array([
+                        float(last_data_point["1. open"]),
+                        float(last_data_point["2. high"]),
+                        float(last_data_point["3. low"]),
+                        float(last_data_point["4. close"])
+                    ]).reshape(1, -1)
+
+                    next_open = open_model.predict(last_features)[0]
+                    next_high = high_model.predict(last_features)[0]
+                    next_low = low_model.predict(last_features)[0]
+                    next_close = close_model.predict(last_features)[0]
+
+                    predicted_data = {
+                        "1. open": str(next_open),
+                        "2. high": str(next_high),
+                        "3. low": str(next_low),
+                        "4. close": str(next_close),
+                        "5. volume": "0",  # Volume is not predicted, so setting it to 0
+                        "6. prediction_date": str(arrow.now().humanize()),
+                        "7. symbol": symbol
+                    }
+
+
+
+                    file_name = f"comp_predictions/{symbol}_predictions.json"  # Define file_name before any conditional blocks
+
+                    if os.path.exists(file_name):
+                        with open(file_name, "r") as file:
+                            existing_data = json.load(file)
+                    else:
+                        existing_data = []
+
+                    existing_data.append(predicted_data)  # Append predicted_data to existing_data list
+
+                    with open(file_name, "w") as file:
+                        json.dump(existing_data, file)
+                        logger.warning(f"Predictions made successfully for symbol {symbol}")
+
+
+
+
+        except Exception as e:
+            logger.error(f"Error occurred during prediction: {e}")
+
+
+
 
     def currency_market(self, fsymbol, tsymbol):
         url = f"https://www.alphavantage.co/query?function=FX_DAILY&from_symbol={fsymbol}&to_symbol={tsymbol}&apikey={self.apikey}"
@@ -127,14 +156,13 @@ class ForexPredictor:
         if response.status_code == 200:
             data = response.json()
             # Save data to history file
-            self.save_to_history(data, type="currency")
+            self.save_to_history(data)
             return data
         else:
             print("Error fetching data:", response.status_code)
             return None
 
-    def save_to_history(self, data, type):
-        if type == "currency":
+    def save_to_history(self, data):
             if os.path.exists(self.history_file):
                 with open(self.history_file, "r") as file:
                     history = json.load(file)
@@ -146,17 +174,19 @@ class ForexPredictor:
             with open(self.history_file, "w") as file:
                 json.dump(history, file)
 
-        if type == "comp":
-            if os.path.exists(self.comp_file):
-                with open(self.comp_file, "r") as file:
-                    history = json.load(file)
-            else:
-                history = []
+    def save_comp_history(self,data):
+        if os.path.exists(self.comp_file):
+            with open(self.comp_file, "r") as file:
+                history = json.load(file)
+        else:
+            history = []
+        
+        history.append(data)
 
-                history.append(data)
+        with open(self.comp_file, "w") as file:
+            json.dump(history, file)
 
-                with open(self.comp_file, "w") as file:
-                    json.dump(history, file)
+
 
     def check_history(self):
         if os.path.exists(self.history_file):

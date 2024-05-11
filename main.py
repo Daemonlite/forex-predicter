@@ -22,10 +22,7 @@ def main():
         interval = input("input time interval egs.1,2,3 all are in minutes : ")
         predictor.most_recent_comp_OHLCV_to_json(symbol=symbol, interval=interval)
 
-        print("Waiting for 10 seconds before making predictions...")
-        time.sleep(10)
-
-        predictor.predict_comp()
+        predictor.predict_comp(symbol)
 
     elif pred == "2":
 
@@ -39,10 +36,6 @@ def main():
 
         # Fetch historical data for the specified currency pair
         predictor.currency_market(fsymbol=from_symbol, tsymbol=to_symbol)
-
-        # Wait for ten seconds
-        print("Waiting for 10 seconds before making predictions...")
-        time.sleep(10)
 
         # Predict the later outcome
         predictor.predictor()
